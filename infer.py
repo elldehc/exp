@@ -29,21 +29,21 @@ def _infer(path_to_input_image: str, path_to_output_image: str, path_to_checkpoi
         # image = transforms.Image.open(path_to_input_image)
         image=Image.open(path_to_input_image)
         image_tensor, scale = dataset_class.preprocess(image, Config.IMAGE_MIN_SIDE, Config.IMAGE_MAX_SIDE)
-        print(image_tensor.shape)
-        print(image_tensor[:,:10,:10])
+        # print(image_tensor.shape)
+        # print(image_tensor[:,:10,:10])
         detection_bboxes, detection_classes, detection_probs, _ = \
             model.eval().forward(image_tensor.unsqueeze(dim=0).cuda())
         detection_bboxes /= scale
 
-        print(detection_bboxes.shape)
+        # print(detection_bboxes.shape)
         kept_indices = detection_probs > prob_thresh
         detection_bboxes = detection_bboxes[kept_indices]
         detection_classes = detection_classes[kept_indices]
         detection_probs = detection_probs[kept_indices]
         print(detection_bboxes.shape)
-        print(detection_bboxes[:10])
-        print(detection_classes[:10])
-        print(detection_probs[:10])
+        print(detection_bboxes)
+        # print(detection_classes[:10])
+        # print(detection_probs[:10])
         
 
         draw = ImageDraw.Draw(image)

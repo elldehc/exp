@@ -19,6 +19,7 @@ import pandas as pd
 from sklearn import metrics
 from dataset.base import Base as DatasetBase
 from torchvision.transforms import transforms
+from tqdm import tqdm
 
 
 class ResNet101Back(backbone.base.Base):
@@ -83,6 +84,8 @@ model.eval()
 def calc_acc(detbb,gtbb,threshold=0.5):
     frames=np.max(gtbb[:,0])
     scores=[]
+    fp=0
+    tp=0
     for i in range(1,frames+1):
         detframe=detbb[detbb[:,0]==i]
         gtframe=gtbb[gtbb[:,0]==i]
@@ -102,15 +105,47 @@ def calc_acc(detbb,gtbb,threshold=0.5):
         #         au=(detframe[j,3]-detframe[j,1])*(detframe[j,4]-detframe[j,2])+(gtframe[j,3]-gtframe[j,1])*(gtframe[j,4]-gtframe[j,2])-ai
         #         if au>0:
         #             aiou[j,k]=ai/au
-        print(aiou.shape)
-        aiou_sorted=np.argsort(aiou,axis=1)
-        t_scores=np.zeros([detframe.shape[0]])
-        for j in range(gtframe.shape[0]):
-            t_scores[aiou_sorted[j,0]]=aiou[j,aiou_sorted[j,0]]
-        scores.append(t_scores)    
+        # print(aiou.shape)
+        prob_sorted=np.argsort(-detframe[:,5])
+        gt_sorted=np.argsort(gtframe[:,5])
+        matchd=np.zeros([detframe.shape[0]])
+        matchg=np.zeros([gtframe.shape[0]])
+        for j in range(detframe.shape[0]):
+            tj=prob_sorted[j]
+            maxoa=threshold
+            for k in range(gtframe.shape[0]):
+                tk=gt_sorted[k]
+                # if tj==0:
+                #     print(tk,matchg[tk],aiou[tk,tj],gtframe[tk,5])
+                if matchg[tk]:
+                    continue
+                if gtframe[tk,5]==1 and matchd[tj]!=0:
+                    break
+                if aiou[tk,tj]<maxoa:
+                    continue
+                maxoa=aiou[tk,tj]
+                if gtframe[tk,5]==1:
+                    matchd[tj]=-1
+                    matchg[tk]=-1
+                else:
+                    matchd[tj]=1
+                    matchg[tk]=1
+        tp+=np.sum(matchd!=0)
+        fp+=np.sum(matchd==0)
+        # print(ai[:,0])
+        # print(aiou[:,0])
+        # print(matchd)
+        # print(matchg)
+        # scores.append(np.sum(matchd==1)/np.sum(matchd!=-1))
+        # aiou_sorted=np.argsort(aiou,axis=1)
+        # t_scores=np.zeros([detframe.shape[0]])
+        # for j in range(gtframe.shape[0]):
+        #     t_scores[aiou_sorted[j,0]]=aiou[j,aiou_sorted[j,0]]
+        # scores.append(t_scores)    
         
-    scores=np.concatenate(scores)
-    return metrics.average_precision_score(np.ones_like(scores),scores)
+    # scores=np.concatenate(scores)
+    # return metrics.average_precision_score(np.ones_like(scores),scores)
+    return tp/(tp+fp)
 
 # acc, video size, size after step 1-4, mem usage of step 1-5, gpu mem usage of step 1-5, computing time of step 1-5
 def calc_row(video_file,seg,res,fr):
@@ -120,7 +155,7 @@ def calc_row(video_file,seg,res,fr):
         images.append(im)
     images=np.stack(images)
     ori_size=(images.shape[2],images.shape[1])
-    print(ori_size)
+    # print(ori_size)
     ffmpeg.input("pipe:",
         format="rawvideo",
         pix_fmt="bgr24",
@@ -159,37 +194,89 @@ def calc_row(video_file,seg,res,fr):
     detprob=detprob.cpu().numpy()
     detfr=detfr.cpu().numpy()
     # detbb=np.repeat(detbb,30//FPS_MAP[fr],axis=0)
-    print(detbb.shape,detc.shape,detprob.shape,detfr.shape)
-    print(detbb[:10])
-    print(detc[:10])
-    print(detprob[:10])
-    print(detfr[:10])
-    t=detprob>0.5
+    # print(detbb.shape,detc.shape,detprob.shape,detfr.shape)
+    # print(detbb[:10])
+    # print(detc[:10])
+    # print(detprob[:10])
+    # print(detfr[:10])
+    t=detprob>0.6
     detbb=detbb[t]
     detc=detc[t]
     detprob=detprob[t]
     detfr=detfr[t]
-    print(detbb.shape,detc.shape,detprob.shape,detfr.shape)
-    print(detbb[:10])
-    print(detc[:10])
-    print(detprob[:10])
-    print(detfr[:10])
-    newdetbb=np.zeros([detbb.shape[0]*30//FPS_MAP[fr],5])
-    for i in range(detbb.shape[0]):
-        for j in range(30//FPS_MAP[fr]):
-            newdetbb[i*30//FPS_MAP[fr]+j,1:]=detbb[i]
-            newdetbb[i*30//FPS_MAP[fr]+j,0]=detfr[i]
+    # print(detbb.shape,detc.shape,detprob.shape,detfr.shape)
+    # print(detbb[:10])
+    # print(detc[:10])
+    # print(detprob[:10])
+    # print(detfr[:10])
+    detbb[:,2]-=detbb[:,0]
+    detbb[:,3]-=detbb[:,1]
+    newdetbb=np.concatenate([detfr[:,None],detbb,detprob[:,None]],axis=1)
+    # print(detbb[detfr==0])
+    # newdetbb=np.zeros([detbb.shape[0]*30//FPS_MAP[fr],6])
+    # for i in range(detbb.shape[0]):
+    #     for j in range(30//FPS_MAP[fr]):
+    #         newdetbb[i*30//FPS_MAP[fr]+j,1:5]=detbb[i]
+    #         newdetbb[i*30//FPS_MAP[fr]+j,0]=detfr[i]
+    #         newdetbb[i*30//FPS_MAP[fr]+j,5]=detprob[i]
 
     
     df=pd.read_csv(DATA_PATH/"annotations"/(video_file+".txt"),header=None).to_numpy()
-    gtbb=df[:,[0,3,4,5,6]]
-    print(gtbb.shape)
+    gtbb=df[:,[0,2,3,4,5,6]]
+    gtbb[:,0]-=1
+    # print(gtbb.shape)
+    # print(gtbb[gtbb[:,0]==0,1:5])
     acc=calc_acc(newdetbb,gtbb)
 
     
     return acc,sizes,mem_usage,gpu_mem_usage,comp_time
 
 if __name__=="__main__":
-    print(calc_row("uav0000013_00000_v",0,4,4))
+    con=sqlite3.connect("profile_table.db")
+    cur=con.cursor()
+    cur.execute("create table if not exists profile \
+                (video text,\
+                seg integer,\
+                res integer,\
+                fr integer,\
+                acc real,\
+                size0 integer,\
+                size1 integer,\
+                size2 integer,\
+                size3 integer,\
+                size4 integer,\
+                mem0 integer,\
+                mem1 integer,\
+                mem2 integer,\
+                mem3 integer,\
+                mem4 integer,\
+                gpumem0 integer,\
+                gpumem1 integer,\
+                gpumem2 integer,\
+                gpumem3 integer,\
+                gpumem4 integer,\
+                time0 real,\
+                time1 real,\
+                time2 real,\
+                time3 real,\
+                time4 real,\
+                primary key (video,seg,res,fr)\
+                );")
+    videos=[it.name for it in (DATA_PATH/"sequences").iterdir()]
+    video_segs=[]
+    for video in videos:
+        segnum=len(list((DATA_PATH/"sequences"/video).glob("*.jpg")))//30
+        for i in range(segnum):
+            for j in range(5):
+                for k in range(5):
+                    video_segs.append((video,i,j,k))
+    res=cur.execute("select video,seg,res,fr from profile;")
+    done_list=set(res.fetchall())
+    for seg in tqdm(video_segs):
+        if seg not in done_list:
+            ans=calc_row(seg[0],seg[1],seg[2],seg[3])
+            flatten_ans=list(seg)+[ans[0]]+ans[1]+ans[2]+ans[3]+ans[4]
+            cur.execute("insert into profile values ("+",".join("?"*25)+");",flatten_ans)
+
 
         

@@ -73,6 +73,10 @@ class Model(nn.Module):
         else:
             features = self.features(image_batch)
         # print(torch.sum(features[0]))
+        if self.need_profile:
+            tracemalloc.start()
+            torch.cuda.reset_peak_memory_stats()
+            tttt=datetime.now().timestamp()
         if image_batch_shape is None:
             image_batch_shape=image_batch.shape
         batch_size, _, image_height, image_width = image_batch_shape
@@ -96,6 +100,13 @@ class Model(nn.Module):
             proposal_classes, proposal_transformers = self.detection.forward(features, proposal_bboxes)
             detection_bboxes, detection_classes, detection_probs, detection_batch_indices = self.detection.generate_detections(proposal_bboxes, proposal_classes, proposal_transformers, image_width, image_height)
             if self.need_profile:
+                torch.cuda.synchronize()
+                comp_time.append(datetime.now().timestamp()-tttt)
+                gpumem=torch.cuda.max_memory_allocated()
+                gpu_mem_usage.append(gpumem)
+                current,peak=tracemalloc.get_traced_memory()
+                tracemalloc.stop()
+                mem_usage.append(peak)
                 return detection_bboxes, detection_classes, detection_probs, detection_batch_indices,comp_time,inter_results,mem_usage,gpu_mem_usage
             else:
                 return detection_bboxes, detection_classes, detection_probs, detection_batch_indices
