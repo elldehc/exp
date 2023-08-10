@@ -151,7 +151,7 @@ def calc_acc(detbb,gtbb,threshold=0.5):
 def calc_row(video_file,seg,res,fr):
     images=[]
     for it in range(1,31):
-        im=cv2.imread(str(DATA_PATH/"sequences"/video_file/"{:07d}.jpg".format(seg*75+it)))
+        im=cv2.imread(str(DATA_PATH/"sequences"/video_file/"{:07d}.jpg".format(seg*30+it)))
         images.append(im)
     images=np.stack(images)
     ori_size=(images.shape[2],images.shape[1])
