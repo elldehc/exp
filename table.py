@@ -145,7 +145,10 @@ def calc_acc(detbb,gtbb,threshold=0.5):
         
     # scores=np.concatenate(scores)
     # return metrics.average_precision_score(np.ones_like(scores),scores)
-    return tp/(tp+fp)
+    if tp+fp==0:
+        return 0
+    else:
+        return tp/(tp+fp)
 
 # acc, video size, size after step 1-4, mem usage of step 1-5, gpu mem usage of step 1-5, computing time of step 1-5
 def calc_row(video_file,seg,res,fr):
@@ -277,6 +280,8 @@ if __name__=="__main__":
             ans=calc_row(seg[0],seg[1],seg[2],seg[3])
             flatten_ans=list(seg)+[ans[0]]+ans[1]+ans[2]+ans[3]+ans[4]
             cur.execute("insert into profile values ("+",".join("?"*25)+");",flatten_ans)
+            con.commit()
+    con.close()
 
 
         
