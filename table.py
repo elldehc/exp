@@ -13,11 +13,7 @@ from dataset.coco2017 import COCO2017
 from config.eval_config import EvalConfig as Config
 import backbone.base
 from typing import Tuple
-from datetime import datetime
-import tracemalloc
 import pandas as pd
-from sklearn import metrics
-from dataset.base import Base as DatasetBase
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
@@ -56,7 +52,7 @@ class ResNet101Back(backbone.base.Base):
 RES_MAP = [360, 540, 720, 900, 1080]
 FPS_MAP = [2, 3, 5, 10, 15]
 RESNET101_CHECKPOINT="model-180000.pth"
-DATA_PATH=Path("/mnt/data20/datasets/VisDrone2019-VID-train")
+DATA_PATH=Path("/mnt/data20/datasets/VisDrone2019-VID-test-dev")
 
 # resnet101 = torchvision.models.resnet101(pretrained=False)
 # resnet101.load_state_dict(torch.load(RESNET101_CHECKPOINT),strict=False)
@@ -235,7 +231,7 @@ def calc_row(video_file,seg,res,fr):
     return acc,sizes,mem_usage,gpu_mem_usage,comp_time
 
 if __name__=="__main__":
-    con=sqlite3.connect("profile_table.db")
+    con=sqlite3.connect("profile_table-test.db")
     cur=con.cursor()
     cur.execute("create table if not exists profile \
                 (video text,\
