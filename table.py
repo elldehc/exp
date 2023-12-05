@@ -16,6 +16,10 @@ from typing import Tuple
 import pandas as pd
 from torchvision.transforms import transforms
 from tqdm import tqdm
+from PIL import Image
+from PIL import ImageDraw
+import random
+from bbox import BBox
 
 
 class ResNet101Back(backbone.base.Base):
@@ -52,7 +56,7 @@ class ResNet101Back(backbone.base.Base):
 RES_MAP = [360, 540, 720, 900, 1080]
 FPS_MAP = [2, 3, 5, 10, 15]
 RESNET101_CHECKPOINT="model-180000.pth"
-DATA_PATH=Path("/mnt/data20/datasets/VisDrone2019-VID-test-dev")
+DATA_PATH=Path("/mnt/data20/datasets/VisDrone2019-VID-train")
 
 # resnet101 = torchvision.models.resnet101(pretrained=False)
 # resnet101.load_state_dict(torch.load(RESNET101_CHECKPOINT),strict=False)
@@ -82,17 +86,18 @@ def calc_acc(detbb,gtbb,threshold=0.5):
     scores=[]
     fp=0
     tp=0
-    for i in range(1,frames+1):
+    for i in range(frames+1):
         detframe=detbb[detbb[:,0]==i]
         gtframe=gtbb[gtbb[:,0]==i]
+        if detframe.shape[0]==0:
+            continue
+
         aiou=np.zeros([gtframe.shape[0],detframe.shape[0]])
         ix=np.maximum(0,np.minimum(gtframe[:,None,1]+gtframe[:,None,3],detframe[None,:,1]+detframe[None,:,3])-np.maximum(gtframe[:,None,1],detframe[None,:,1]))
         iy=np.maximum(0,np.minimum(gtframe[:,None,2]+gtframe[:,None,4],detframe[None,:,2]+detframe[None,:,4])-np.maximum(gtframe[:,None,2],detframe[None,:,2]))
         ai=ix*iy
         au=((detframe[:,3])*(detframe[:,4]))[None,:]+((gtframe[:,3])*(gtframe[:,4]))[:,None]-ai
         aiou=ai/au
-        if detframe.shape[0]==0:
-            continue
         # for j in range(detframe.shape[0]):
         #     for k in range(gtframe.shape[0]):
         #         ix=max(0,min(detframe[j,3],gtframe[k,3])-max(detframe[j,1],gtframe[k,1]))
@@ -145,6 +150,18 @@ def calc_acc(detbb,gtbb,threshold=0.5):
         return 0
     else:
         return tp/(tp+fp)
+    
+def print_bbox(image,detection_bboxes,path_to_output_image):
+    image=Image.fromarray(np.transpose(image,[1,2,0]))
+    draw = ImageDraw.Draw(image)
+
+    for bbox in detection_bboxes.tolist():
+        color = random.choice(['red', 'green', 'blue', 'yellow', 'purple', 'white'])
+        bbox = BBox(left=bbox[0], top=bbox[1], right=bbox[0]+bbox[2], bottom=bbox[1]+bbox[3])
+        
+        draw.rectangle(((bbox.left, bbox.top), (bbox.right, bbox.bottom)), outline=color)
+        
+    image.save(path_to_output_image)
 
 # acc, video size, size after step 1-4, mem usage of step 1-5, gpu mem usage of step 1-5, computing time of step 1-5
 def calc_row(video_file,seg,res,fr):
@@ -173,7 +190,9 @@ def calc_row(video_file,seg,res,fr):
             transforms.Resize((RES_MAP[res],RES_MAP[res]//9*16)),  # interpolation `BILINEAR` is applied by default
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
+    ori_images=(images*256).cpu().numpy().astype(np.uint8)
     images = transform(images)
+
     # images=images.detach().cuda()
     # print(images[0,:,:10,:10])
     sizes=[video_size]
@@ -203,6 +222,7 @@ def calc_row(video_file,seg,res,fr):
     detc=detc[t]
     detprob=detprob[t]
     detfr=detfr[t]
+    detfr=detfr*(30//FPS_MAP[fr])+seg*30
     # print(detbb.shape,detc.shape,detprob.shape,detfr.shape)
     # print(detbb[:10])
     # print(detc[:10])
@@ -226,12 +246,17 @@ def calc_row(video_file,seg,res,fr):
     # print(gtbb.shape)
     # print(gtbb[gtbb[:,0]==0,1:5])
     acc=calc_acc(newdetbb,gtbb)
-
+    # if FPS_MAP[fr]==15:
+    #     for i in range(15):
+    #         # print(images.shape)
+    #         print_bbox(ori_images[i],detbb[detfr==seg*30+i*2],f"tmp_jpg/{video_file}_{seg*30+i*2+1}_{res}.jpg")
+    #         print_bbox(ori_images[i],gtbb[gtbb[:,0]==seg*30+i*2][:,1:5],f"tmp_jpg/{video_file}_{seg*30+i*2+1}_{res}_std.jpg")
+            
     
     return acc,sizes,mem_usage,gpu_mem_usage,comp_time
 
 if __name__=="__main__":
-    con=sqlite3.connect("profile_table-test.db")
+    con=sqlite3.connect("profile_table.db")
     cur=con.cursor()
     cur.execute("create table if not exists profile \
                 (video text,\
@@ -271,9 +296,11 @@ if __name__=="__main__":
                     video_segs.append((video,i,j,k))
     res=cur.execute("select video,seg,res,fr from profile;")
     done_list=set(res.fetchall())
-    for seg in tqdm(video_segs):
+    bar=tqdm(video_segs)
+    for seg in bar:
         if seg not in done_list:
             ans=calc_row(seg[0],seg[1],seg[2],seg[3])
+            bar.set_description(f"acc={ans[0]:.3f}")
             flatten_ans=list(seg)+[ans[0]]+ans[1]+ans[2]+ans[3]+ans[4]
             cur.execute("insert into profile values ("+",".join("?"*25)+");",flatten_ans)
             con.commit()

@@ -10,12 +10,11 @@ import pickle
 
 
 def eval_rong():
-    env=Env("profile_table.db",is_train=False)
-    bar=tqdm(range(100000))
+    env=Env("profile_table-val.db",is_train=False)
     tot_reward=0
     anss=[]
     tot_tasks=0
-    for epoch in bar:
+    while True:
         states=[[],[],[]]
         for i in range(EDGE_CLUSTER_NUM):
             t=env.get_state(i)
@@ -34,13 +33,14 @@ def eval_rong():
 
         
         reward,ans=env.submit_action(action_dict)
-        bar.set_description(f"reward={reward}")
+        # print(np.mean(reward)-sum(it[3] for it in ans)/len(ans))
+        # assert np.abs(np.mean(reward)-sum(it[3] for it in ans)/len(ans))<1e-9
         tot_reward+=np.mean(reward)
-        tot_tasks+=len(action_dict)
+        tot_tasks+=EDGE_CLUSTER_NUM
         anss+=ans
         if env.finished():
             break
-    return tot_reward/tot_tasks,anss
+    return sum(it[3] for it in anss)/len(anss),anss
 
 if __name__=="__main__":
     t,anss=eval_rong()

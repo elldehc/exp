@@ -647,12 +647,12 @@ def rong_schedule(res,taskid,pref):
         place=ans[name]["place"][0]
         if place==0:
             if len(config)==2:
-                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),4,i%EDGE_NODE_NUM,i%2,i%CLOUD_NODE_NUM)
+                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),4,i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
             else:
-                ret_ans[taskid[i]]=(int(config[1]),int(config[2]),4,i%EDGE_NODE_NUM,i%2,i%CLOUD_NODE_NUM)
+                ret_ans[taskid[i]]=(int(config[1]),int(config[2]),4,i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
         else:
             if len(config)==3:
-                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),max(0,4-int(config[2])),i%EDGE_NODE_NUM,i%2,i%CLOUD_NODE_NUM)
+                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),max(0,4-int(config[2])),i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
             else:
-                ret_ans[taskid[i]]=(int(config[4]),int(config[5]),max(0,4-int(config[6])),i%EDGE_NODE_NUM,i%2,i%CLOUD_NODE_NUM)
+                ret_ans[taskid[i]]=(int(config[4]),int(config[5]),max(0,4-int(config[6])),i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
     return ret_ans

@@ -13,10 +13,10 @@ TASK_PER_CLUSTER=10
 HISTORY_NUM=10
 RES_MAP = [360, 540, 720, 900, 1080]
 FPS_MAP = [2, 3, 5, 10, 15]
-ECOST=1.0/3600
-CCOST=[2.2/3600,1.8/3600]
-ECCOST=0.01e-6
-FAILC=-100
+ECOST=1.0/3600*10
+CCOST=[2.2/3600,1.8/3600]*10
+ECCOST=0.01e-6*10
+FAILC=-10
 EDGE_BW=10e9/8
 CLOUD_BW=10e9/8
 EDGE_RTT=0.1e-3
@@ -33,7 +33,8 @@ class Env:
         self.tasknum=TASK_PER_CLUSTER*EDGE_CLUSTER_NUM
         self.is_train=is_train
         if not self.is_train:
-            self.alpha=pickle.load(open("our_alpha.pkl","rb"))
+            self.alpha=np.array(pickle.load(open("our_alpha.pkl","rb"))[:100],dtype=np.float32)
+            self.alpha/=np.sum(self.alpha,axis=1)[:,None]
             self.alpha_num=0
         con=sqlite3.connect(self.table_file)
         cur=con.cursor()
@@ -62,13 +63,18 @@ class Env:
         if self.is_train:
             self.now_video=[self.video_list[random.randint(0,len(self.video_list)-1)]for i in range(self.tasknum)]
             self.now_seg=[0]*self.tasknum
-            self.now_para=[(random.random(),random.random(),random.random()) for i in range(self.tasknum)]
+            self.now_para=np.array([(random.random(),random.random(),random.random()) for i in range(self.tasknum)],dtype=np.float32)
+            self.now_para/=np.sum(self.now_para,axis=1)[:,None]
         else:
-            self.now_video=[self.video_list[i]for i in range(self.tasknum)]
+            self.now_video=[self.video_list[i%len(self.video_list)]for i in range(self.tasknum)]
             self.now_seg=[0]*self.tasknum
             self.now_para=[self.alpha[i] for i in range(self.tasknum)]
             self.alpha_num=self.tasknum
-            self.now_video_num=self.tasknum
+            self.now_video_num=self.tasknum%len(self.video_list)
+            for i in range(self.tasknum):
+                if self.maxacc[(self.now_video[i],self.now_seg[i])]==0:
+                    self.getnextseg(i)
+
         self.now_cluster=[i for j in range(TASK_PER_CLUSTER) for i in range(EDGE_CLUSTER_NUM)]
         self.history=[]
         for i in range(HISTORY_NUM):
@@ -148,19 +154,44 @@ class Env:
                     self.now_seg[i]=0
                     self.now_para[i]=(random.random(),random.random(),random.random())
                 else:
-                    self.now_video[i]=self.video_list[self.now_video_num]
-                    self.now_seg[i]=0
-                    self.now_para[i]=self.alpha[self.alpha_num]
                     self.now_video_num+=1
                     self.alpha_num+=1
-                    if self.alpha_num>=len(self.alpha):
-                        self.alpha_num=0
+                    if self.now_video_num>=len(self.video_list):
+                        self.now_video_num=0
+                    if self.alpha_num<len(self.alpha):
+                        self.now_video[i]=self.video_list[self.now_video_num]
+                        self.now_seg[i]=0
+                        self.now_para[i]=self.alpha[self.alpha_num]
+                    # if self.alpha_num>=len(self.alpha):
+                    #     self.alpha_num=0
                         
 
         return tot_ans,all_ans
     
+    def getnextseg(self,cluster):
+        while True:
+            self.now_seg[cluster]+=1
+            if self.now_seg[cluster]>=self.videos[self.now_video[cluster]]:
+                if self.is_train:
+                    self.now_video[cluster]=self.video_list[random.randint(0,len(self.video_list)-1)]
+                    self.now_seg[cluster]=0
+                    new_para=np.array([random.random(),random.random(),random.random()],dtype=np.float32)
+                    self.now_para[cluster]=new_para/np.sum(new_para)
+                else:
+                    if self.alpha_num<len(self.alpha):
+                        self.now_video[cluster]=self.video_list[self.now_video_num]
+                        self.now_seg[cluster]=0
+                        self.now_para[cluster]=self.alpha[self.alpha_num]
+                    self.now_video_num+=1
+                    self.alpha_num+=1
+                    if self.now_video_num>=len(self.video_list):
+                        self.now_video_num=0
+                    
+            if self.maxacc[(self.now_video[cluster],self.now_seg[cluster])]>0 or self.finished():
+                break
+    
     def finished(self):
-        return not self.is_train and self.now_video_num>=len(self.video_list)
+        return not self.is_train and self.alpha_num>=len(self.alpha)
         
 
 

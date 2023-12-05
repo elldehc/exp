@@ -63,14 +63,14 @@ def _infer(path_to_input_image: str, path_to_output_image: str, path_to_checkpoi
 if __name__ == '__main__':
     def main():
         parser = argparse.ArgumentParser()
-        parser.add_argument('-s', '--dataset', type=str, choices=DatasetBase.OPTIONS, required=True, help='name of dataset')
-        parser.add_argument('-b', '--backbone', type=str, choices=BackboneBase.OPTIONS, required=True, help='name of backbone model')
-        parser.add_argument('-c', '--checkpoint', type=str, required=True, help='path to checkpoint')
+        parser.add_argument('-s', '--dataset', type=str, choices=DatasetBase.OPTIONS,default='coco2017',  help='name of dataset')
+        parser.add_argument('-b', '--backbone', type=str, choices=BackboneBase.OPTIONS,default='resnet101',  help='name of backbone model')
+        parser.add_argument('-c', '--checkpoint', type=str, default="model-180000.pth", help='path to checkpoint')
         parser.add_argument('-p', '--probability_threshold', type=float, default=0.6, help='threshold of detection probability')
         parser.add_argument('--image_min_side', type=float, help='default: {:g}'.format(Config.IMAGE_MIN_SIDE))
         parser.add_argument('--image_max_side', type=float, help='default: {:g}'.format(Config.IMAGE_MAX_SIDE))
         parser.add_argument('--anchor_ratios', type=str, help='default: "{!s}"'.format(Config.ANCHOR_RATIOS))
-        parser.add_argument('--anchor_sizes', type=str, help='default: "{!s}"'.format(Config.ANCHOR_SIZES))
+        parser.add_argument('--anchor_sizes', type=str,default="[64,128,256,512]", help='default: "{!s}"'.format(Config.ANCHOR_SIZES))
         parser.add_argument('--pooler_mode', type=str, choices=Pooler.OPTIONS, help='default: {.value:s}'.format(Config.POOLER_MODE))
         parser.add_argument('--rpn_pre_nms_top_n', type=int, help='default: {:d}'.format(Config.RPN_PRE_NMS_TOP_N))
         parser.add_argument('--rpn_post_nms_top_n', type=int, help='default: {:d}'.format(Config.RPN_POST_NMS_TOP_N))

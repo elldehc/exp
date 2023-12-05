@@ -37,19 +37,14 @@ def random_choice(prob):
             x-=prob[i]
 
 
-def eval_rl(batch_size=8,gamma=0.1):
-    env=Env("profile_table.db",is_train=False)
-    bar=tqdm(range(100000))
+def eval_rl(actor:Actor):
+    env=Env("profile_table-val.db",is_train=False)
     tot_reward=0
     anss=[]
     tot_tasks=0
     with torch.no_grad():
-        actor=Actor().eval().cuda()
-        Path("saved_models").mkdir(exist_ok=True)
-        last=load_best_actor_model(actor)
         reward=torch.tensor([0 for i in range(EDGE_CLUSTER_NUM)],device="cuda")
-        bar=tqdm(range(last+1,100000),desc=f"reward={reward}")
-        for epoch in bar:
+        while True:
             states=[[],[],[]]
             for i in range(EDGE_CLUSTER_NUM):
                 t=env.get_state(i)
@@ -63,24 +58,29 @@ def eval_rl(batch_size=8,gamma=0.1):
             actions=[[] for _ in range(6)]
             action_dict=dict()
             for i in range(EDGE_CLUSTER_NUM):
-                t=actor(states[0][i],states[2][i])
+                cluster=torch.zeros([EDGE_CLUSTER_NUM],device="cuda",dtype=torch.float)
+                cluster[i]=1
+                t=actor(states[0][i],cluster,states[2][i])
                 for j in range(6):
                     actions[j].append(t[j][0])
                 for j in range(t[0].shape[0]):
-                    action_dict[states[1][i][j]]=tuple(random_choice(t[k][0][j]) for k in range(6))
+                    action_dict[states[1][i][j]]=tuple(np.argmax(t[k][0][j].cpu().numpy()) for k in range(6))
             for j in range(6):
                 actions[j]=torch.stack(actions[j])
             reward,ans=env.submit_action(action_dict)
-            bar.set_description(f"reward={reward}")
             tot_reward+=np.mean(reward)
-            tot_tasks+=len(action_dict)
+            tot_tasks+=EDGE_CLUSTER_NUM
             anss+=ans
             if env.finished():
                 break
-    return tot_reward/tot_tasks,anss
+    return sum(it[3] for it in anss)/len(anss),anss
             
 if __name__=="__main__":
-    t,anss=eval_rl()
+    actor=Actor().eval().cuda()
+    Path("saved_models").mkdir(exist_ok=True)
+    last=load_best_actor_model(actor)
+        
+    t,anss=eval_rl(actor)
     print(t)
     # print(anss)
     # acc=sorted([it[0] for it in anss])
