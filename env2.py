@@ -20,11 +20,12 @@ FAILC=-10
 EDGE_BW=10e9/8
 CLOUD_BW=10e9/8
 EDGE_RTT=0.1e-3
-CLOUD_RTT=20e-3
+CLOUD_RTT=[10e-3,50e-3]
 EDGE_MEM=32*1e9
 CLOUD_MEM=256*1e9
 EDGE_GPU_MEM=16*1e9
 CLOUD_GPU_MEM=128*1e9
+DELAY_THR=0.2
 
 
 class Env:
@@ -117,11 +118,11 @@ class Env:
             used_cloud_res[actions[it][4]][actions[it][5]][1]+=cloud_res[0]
             used_cloud_res[actions[it][4]][actions[it][5]][2]+=cloud_res[1]
             size_client_edge[it]=sizes[0]
-            size_edge_cloud[it]=sizes[actions[it][2]]
+            size_edge_cloud[it]=sizes[actions[it][2]] if actions[it][2]<5 else 0
             # assert size_client_edge[it]>=0
             # assert self.now_para[it][1]>=0
             used_edge_res[cluster][actions[it][3]][3]+=np.sqrt(sizes[0]*self.now_para[it][1])
-            used_cloud_res[actions[it][4]][actions[it][5]][3]+=np.sqrt(sizes[actions[it][2]]*self.now_para[it][1])
+            used_cloud_res[actions[it][4]][actions[it][5]][3]+=np.sqrt(size_edge_cloud[it]*self.now_para[it][1])
         tot_ans=[0 for i in range(EDGE_CLUSTER_NUM)]
         all_ans=[]
         for it in actions:
@@ -131,10 +132,13 @@ class Env:
             edge_calc_lat=sum(times[:actions[it][2]])*used_edge_res[cluster][actions[it][3]][0]
             cloud_calc_lat=sum(times[actions[it][2]:])*used_cloud_res[actions[it][4]][actions[it][5]][0]
             edge_trans_lat=used_edge_res[cluster][actions[it][3]][3]/EDGE_BW/np.sqrt(sizes[0]*self.now_para[it][1])
-            cloud_trans_lat=used_cloud_res[actions[it][4]][actions[it][5]][3]/CLOUD_BW/np.sqrt(sizes[actions[it][2]]*self.now_para[it][1])
+            if size_edge_cloud[it]>0:
+                cloud_trans_lat=used_cloud_res[actions[it][4]][actions[it][5]][3]/CLOUD_BW/np.sqrt(size_edge_cloud[it]*self.now_para[it][1])
+            else:
+                cloud_trans_lat=0
             cost=ECOST*edge_calc_lat+CCOST[actions[it][4]]*cloud_calc_lat+ECCOST*size_edge_cloud[it]
-            lat=self.now_para[it][1]*(edge_calc_lat+cloud_calc_lat)+edge_trans_lat+cloud_trans_lat
-            real_lat=edge_calc_lat+cloud_calc_lat+(edge_trans_lat+cloud_trans_lat)/self.now_para[it][1]
+            lat=self.now_para[it][1]*(edge_calc_lat+cloud_calc_lat+EDGE_RTT+(CLOUD_RTT[actions[it][4]] if size_edge_cloud[it]>0 else 0))+edge_trans_lat+cloud_trans_lat
+            real_lat=edge_calc_lat+cloud_calc_lat+EDGE_RTT+(CLOUD_RTT[actions[it][4]] if size_edge_cloud[it]>0 else 0)+(edge_trans_lat+cloud_trans_lat)/self.now_para[it][1]
             u=self.now_para[it][0]*acc[it]-lat-self.now_para[it][2]*cost
             # print(self.now_para[it][0]*acc[it],lat,self.now_para[it][2]*cost)
             if used_edge_res[cluster][actions[it][3]][1]>EDGE_MEM or used_edge_res[cluster][actions[it][3]][1]>EDGE_GPU_MEM or used_cloud_res[actions[it][4]][actions[it][5]][1]>CLOUD_MEM or used_cloud_res[actions[it][4]][actions[it][5]][1]>CLOUD_GPU_MEM:
