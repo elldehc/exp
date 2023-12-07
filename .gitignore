@@ -4,3 +4,9 @@
 *.pth
 *.pyc
 *.so
+*.png
+*.xlsx
+*.json
+*.db
+*.pkl
+*.yaml

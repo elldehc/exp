@@ -1,5 +1,4 @@
 from env2 import Env
-import torch
 from pathlib import Path
 from copy import deepcopy
 import numpy as np
@@ -19,9 +18,9 @@ def eval_rong():
         for i in range(EDGE_CLUSTER_NUM):
             t=env.get_state(i)
             # print(t[0])
-            res=torch.tensor(t[0],dtype=torch.float)
+            res=np.array(t[0],dtype=np.float32)
             taskid=list(t[1].keys())
-            pref=torch.tensor([t[1][j] for j in taskid])
+            pref=np.array([t[1][j] for j in taskid])
             states[0].append(res)
             states[1].append(taskid)
             states[2].append(pref)

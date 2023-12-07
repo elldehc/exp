@@ -44,7 +44,7 @@ for res in range(5):
             cprofile["edge_cu"].append(edge_cu)
             cprofile["cloud_cu"].append(cloud_cu)
             cprofile["ac"].append(ac)
-            if step==4:
+            if step==5:
                 config=f"{res}{fr}"
                 eprofile["configuration"].append(config)
                 eprofile["bw"].append(bw)

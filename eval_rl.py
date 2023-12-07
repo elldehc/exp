@@ -51,7 +51,7 @@ def eval_rl(actor:Actor):
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
                 taskid=list(t[1].keys())
-                pref=torch.tensor([t[1][j] for j in taskid],device="cuda")
+                pref=torch.tensor(np.array([t[1][j] for j in taskid]),device="cuda")
                 states[0].append(res)
                 states[1].append(taskid)
                 states[2].append(pref)

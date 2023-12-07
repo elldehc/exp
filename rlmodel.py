@@ -14,7 +14,7 @@ class Actor(nn.Module):
         self.fc2=nn.Linear(EDGE_CLUSTER_NUM,128)
         self.fc_res=nn.Linear(256*3,5)
         self.fc_fr=nn.Linear(256*3,5)
-        self.fc_estep=nn.Linear(256*3,5)
+        self.fc_estep=nn.Linear(256*3,6)
         self.fc_enode=nn.Linear(256*3,5)
         self.fc_ccluster=nn.Linear(256*3,2)
         self.fc_cnode=nn.Linear(256*3,10)
