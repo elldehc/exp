@@ -45,25 +45,30 @@ def eval_rl(actor:Actor):
     with torch.no_grad():
         reward=torch.tensor([0 for i in range(EDGE_CLUSTER_NUM)],device="cuda")
         while True:
-            states=[[],[],[]]
+            states=[[],[],[],[]]
             for i in range(EDGE_CLUSTER_NUM):
                 t=env.get_state(i)
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
                 taskid=list(t[1].keys())
                 pref=torch.tensor(np.array([t[1][j] for j in taskid]),device="cuda")
+                # print("i=",i,"taskid=",taskid)
+                history=torch.tensor(t[2],device="cuda",dtype=torch.float)
                 states[0].append(res)
                 states[1].append(taskid)
                 states[2].append(pref)
+                states[3].append(history)
+                
             actions=[[] for _ in range(6)]
             action_dict=dict()
             for i in range(EDGE_CLUSTER_NUM):
                 cluster=torch.zeros([EDGE_CLUSTER_NUM],device="cuda",dtype=torch.float)
                 cluster[i]=1
-                t=actor(states[0][i],cluster,states[2][i])
+                t=actor(states[0][i],cluster,states[2][i],states[3][i])
                 for j in range(6):
                     actions[j].append(t[j][0])
-                for j in range(t[0].shape[0]):
+                for j in range(t[0].shape[1]):
+                    # print("i=",i,"j=",j,states[1][i][j],tuple(np.argmax(t[k][0][j].cpu().numpy()) for k in range(6)))
                     action_dict[states[1][i][j]]=tuple(np.argmax(t[k][0][j].cpu().numpy()) for k in range(6))
             for j in range(6):
                 actions[j]=torch.stack(actions[j])

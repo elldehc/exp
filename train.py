@@ -58,30 +58,36 @@ def train(batch_size=128,gamma=0.9):
         reward=torch.tensor([0 for i in range(EDGE_CLUSTER_NUM)],device="cuda")
         replay_buf=[]
         for step in range(batch_size):
-            states=[[],[],[]]
+            states=[[],[],[],[]]
             for i in range(EDGE_CLUSTER_NUM):
                 t=env.get_state(i)
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
                 taskid=list(t[1].keys())
+                # print("i=",i,"taskid=",taskid)
+                history=torch.tensor(t[2],device="cuda",dtype=torch.float)
                 pref=torch.tensor(np.array([t[1][j] for j in taskid]),device="cuda")
                 states[0].append(res)
                 states[1].append(taskid)
                 states[2].append(pref)
+                states[3].append(history)
             actions=[[] for _ in range(6)]
             action_dict=dict()
             action_prob=[]
             for i in range(EDGE_CLUSTER_NUM):
                 cluster=torch.zeros([EDGE_CLUSTER_NUM],device="cuda",dtype=torch.float)
                 cluster[i]=1
-                t=actor(states[0][i],cluster,states[2][i])
+                t=actor(states[0][i],cluster,states[2][i],states[3][i])
                 for j in range(6):
                     actions[j].append(t[j][0])
-                for j in range(t[0].shape[0]):
+                t_action_prob=0
+                for j in range(t[0].shape[1]):
                     m = [Categorical(t[k][0][j]) for k in range(6)]
                     choices=[m[k].sample() for k in range(6)]
-                    action_prob.append(sum([m[k].log_prob(choices[k]) for k in range(6)]))
+                    t_action_prob+=(sum([m[k].log_prob(choices[k]) for k in range(6)]))
+                    # print("i=",i,"j=",j,states[1][i][j],tuple(choices[k].item() for k in range(6)))
                     action_dict[states[1][i][j]]=tuple(choices[k].item() for k in range(6))
+                action_prob.append(t_action_prob)
             for j in range(6):
                 actions[j]=torch.stack(actions[j])
             
@@ -143,6 +149,7 @@ def train(batch_size=128,gamma=0.9):
         inputs[8]=(inputs[8]-torch.mean(inputs[8]))/(torch.std(inputs[8])+1e-9)
         # new_actions=[[] for _ in range(6)]
         loss+=torch.mean((inputs[8]-inputs[9])**2)
+        # print(inputs[8].shape,inputs[9].shape,inputs[10].shape)
         aloss-=torch.mean((inputs[8]-inputs[9]).detach()*inputs[10])
         
         sloss=loss+aloss

@@ -82,6 +82,12 @@ class Env:
             used_edge_res=[[[0,0,0,0] for i in range(EDGE_NODE_NUM)] for j in range(EDGE_CLUSTER_NUM)]
             used_cloud_res=[[[0,0,0,0] for i in range(CLOUD_NODE_NUM)] for j in range(CLOUD_CLUSTER_NUM)]
             self.history.append((used_edge_res,used_cloud_res))
+        self.action_history=[]
+        for i in range(HISTORY_NUM):
+            action=dict()
+            for j in range(TASK_PER_CLUSTER*EDGE_CLUSTER_NUM):
+                action[j]=[0,0,0,0,0,0,0]
+            self.action_history.append(action)
     
     def get_state(self,edge_cluster):
         cluster_tasks=dict()
@@ -92,7 +98,21 @@ class Env:
         for it in self.history[-HISTORY_NUM:]:
             # print([len(it[0][edge_cluster])]+[len(it[1][i]) for i in range(CLOUD_CLUSTER_NUM)])
             history.append(it[0][edge_cluster]+sum([it[1][i] for i in range(CLOUD_CLUSTER_NUM)],[]))
-        return history,cluster_tasks
+        action_history=[]
+        for it in self.action_history[-HISTORY_NUM:]:
+            # print(it.keys())
+            th=[]
+            for jt in cluster_tasks:
+                for k in range(6):
+                    a=[0]*([5,5,6,5,2,10,1][k])
+                    # print(it[jt])
+                    a[it[jt][k]]=1
+                    th+=a
+                th.append(it[jt][6])
+            action_history.append(th)
+
+
+        return history,cluster_tasks,action_history
 
     def submit_action(self,actions): # actions: dict task id->(resolution,frame rate,edge step,edge select,cloud cluster select,cloud select)
         used_edge_res=[[[0,0,0,0] for i in range(EDGE_NODE_NUM)] for j in range(EDGE_CLUSTER_NUM)]
@@ -144,11 +164,15 @@ class Env:
             if used_edge_res[cluster][actions[it][3]][1]>EDGE_MEM or used_edge_res[cluster][actions[it][3]][1]>EDGE_GPU_MEM or used_cloud_res[actions[it][4]][actions[it][5]][1]>CLOUD_MEM or used_cloud_res[actions[it][4]][actions[it][5]][1]>CLOUD_GPU_MEM:
                 u=FAILC
             tot_ans[cluster]+=u/TASK_PER_CLUSTER
+            actions[it]=list(actions[it])+[u]
             all_ans.append((acc[it],real_lat,cost,u))
 
+        # print("submitted:",actions.keys())
         self.history.append((used_edge_res,used_cloud_res))
+        self.action_history.append(actions)
         if len(self.history)>HISTORY_NUM*10:
             self.history=self.history[-HISTORY_NUM*10:]
+            self.action_history=self.action_history[-HISTORY_NUM*10:]
 
         for i in range(self.tasknum):
             self.now_seg[i]+=1

@@ -179,8 +179,8 @@ def eval_jcab():
         for i in range(EDGE_CLUSTER_NUM):
             t,initu[i],q[i]=oneslot(states[2][i],acc_table,init_ans[i],initu[i],q[i])
             init_ans[i]=t
-            for k,v in t.items():
-                action_dict[k]=v
+            for k,v in init_ans[i].items():
+                action_dict[states[1][i][k]]=v
 
         
         reward,ans=env.submit_action(action_dict)
