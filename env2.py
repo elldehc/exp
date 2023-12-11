@@ -131,12 +131,14 @@ class Env:
             sizes=res[1:6]
             edge_res=sum(res[6:6+actions[it][2]]),sum(res[11:11+actions[it][2]])
             cloud_res=sum(res[6+actions[it][2]:11]),sum(res[11+actions[it][2]:16])
-            used_edge_res[cluster][actions[it][3]][0]+=1
-            used_edge_res[cluster][actions[it][3]][1]+=edge_res[0]
-            used_edge_res[cluster][actions[it][3]][2]+=edge_res[1]
-            used_cloud_res[actions[it][4]][actions[it][5]][0]+=1
-            used_cloud_res[actions[it][4]][actions[it][5]][1]+=cloud_res[0]
-            used_cloud_res[actions[it][4]][actions[it][5]][2]+=cloud_res[1]
+            if actions[it][2]>0:
+                used_edge_res[cluster][actions[it][3]][0]+=1
+                used_edge_res[cluster][actions[it][3]][1]+=edge_res[0]
+                used_edge_res[cluster][actions[it][3]][2]+=edge_res[1]
+            if actions[it][2]<5:
+                used_cloud_res[actions[it][4]][actions[it][5]][0]+=1
+                used_cloud_res[actions[it][4]][actions[it][5]][1]+=cloud_res[0]
+                used_cloud_res[actions[it][4]][actions[it][5]][2]+=cloud_res[1]
             size_client_edge[it]=sizes[0]
             size_edge_cloud[it]=sizes[actions[it][2]] if actions[it][2]<5 else 0
             # assert size_client_edge[it]>=0
@@ -156,7 +158,7 @@ class Env:
                 cloud_trans_lat=used_cloud_res[actions[it][4]][actions[it][5]][3]/CLOUD_BW/np.sqrt(size_edge_cloud[it]*self.now_para[it][1])
             else:
                 cloud_trans_lat=0
-            cost=ECOST*edge_calc_lat+CCOST[actions[it][4]]*cloud_calc_lat+ECCOST*size_edge_cloud[it]
+            cost=ECOST*sum(times[:actions[it][2]])+CCOST[actions[it][4]]*sum(times[actions[it][2]:])+ECCOST*size_edge_cloud[it]
             lat=self.now_para[it][1]*(edge_calc_lat+cloud_calc_lat+EDGE_RTT+(CLOUD_RTT[actions[it][4]] if size_edge_cloud[it]>0 else 0))+edge_trans_lat+cloud_trans_lat
             real_lat=edge_calc_lat+cloud_calc_lat+EDGE_RTT+(CLOUD_RTT[actions[it][4]] if size_edge_cloud[it]>0 else 0)+(edge_trans_lat+cloud_trans_lat)/self.now_para[it][1]
             u=self.now_para[it][0]*acc[it]-lat-self.now_para[it][2]*cost

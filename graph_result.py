@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 
+plt.rcParams["font.size"]=16
 methods=["rong","jcab","rl"]
 ans=dict()
 acc=dict()
@@ -27,6 +28,14 @@ plt.legend()
 plt.savefig("acc.png")
 
 plt.figure()
+bar=plt.bar(methods,[sum(acc[it])/len(ans[it]) for it in methods])
+plt.bar_label(bar)
+plt.ylim((0,1))
+plt.xlabel("method")
+plt.ylabel("accuracy")
+plt.savefig("acc_bar.png")
+
+plt.figure()
 for it in methods:
     plt.plot(lat[it],np.arange(len(ans[it]),dtype=np.float64)/len(ans[it]),label=it)
 plt.ylim((0,1))
@@ -34,6 +43,13 @@ plt.xlabel("latency")
 plt.ylabel("cdf")
 plt.legend()
 plt.savefig("lat.png")
+
+plt.figure()
+bar=plt.bar(methods,[sum(lat[it])/len(ans[it]) for it in methods])
+plt.bar_label(bar)
+plt.xlabel("method")
+plt.ylabel("latency")
+plt.savefig("lat_bar.png")
 
 plt.figure()
 for it in methods:
@@ -45,6 +61,13 @@ plt.legend()
 plt.savefig("cost.png")
 
 plt.figure()
+bar=plt.bar(methods,[sum(cost[it])/len(ans[it]) for it in methods])
+plt.bar_label(bar)
+plt.xlabel("method")
+plt.ylabel("cost")
+plt.savefig("cost_bar.png")
+
+plt.figure()
 for it in methods:
     plt.plot(u[it],np.arange(len(ans[it]),dtype=np.float64)/len(ans[it]),label=it)
 plt.ylim((0,1))
@@ -53,3 +76,10 @@ plt.xlabel("utility")
 plt.ylabel("cdf")
 plt.legend()
 plt.savefig("utility.png")
+
+plt.figure()
+bar=plt.bar(methods,[sum(u[it])/len(ans[it]) for it in methods])
+plt.bar_label(bar)
+plt.xlabel("method")
+plt.ylabel("utility")
+plt.savefig("utility_bar.png")
