@@ -8,14 +8,18 @@ from scheduler import rong_schedule
 import pickle
 
 
-def eval_rong():
+def eval_rong(eval_config_file="eval_config.txt"):
     env=Env("profile_table-val.db",is_train=False)
+    with open(eval_config_file) as f:
+        s=f.read().strip().split("\n")
+        n=int(s[0])
+        tasks=[list(map(int,it.split())) for it in s[1:]]
     tot_reward=0
     anss=[]
     tot_tasks=0
-    while True:
+    for tasknum,clusternum in tqdm(tasks):
         states=[[],[],[]]
-        for i in range(EDGE_CLUSTER_NUM):
+        for i in range(clusternum):
             t=env.get_state(i)
             # print(t[0])
             res=np.array(t[0],dtype=np.float32)
@@ -25,20 +29,18 @@ def eval_rong():
             states[1].append(taskid)
             states[2].append(pref)
         action_dict=dict()
-        for i in range(EDGE_CLUSTER_NUM):
-            t=rong_schedule(states[0][i],states[1][i],states[2][i])
+        for i in range(clusternum):
+            t=rong_schedule(states[0][i][:tasknum],states[1][i][:tasknum],states[2][i][:tasknum])
             for k,v in t.items():
                 action_dict[k]=v
 
         
-        reward,ans=env.submit_action(action_dict)
+        reward,ans=env.submit_action(action_dict,tasknum,clusternum)
         # print(np.mean(reward)-sum(it[3] for it in ans)/len(ans))
         # assert np.abs(np.mean(reward)-sum(it[3] for it in ans)/len(ans))<1e-9
         tot_reward+=np.mean(reward)
-        tot_tasks+=EDGE_CLUSTER_NUM
+        tot_tasks+=tasknum
         anss+=ans
-        if env.finished():
-            break
     return sum(it[3] for it in anss)/len(anss),anss
 
 if __name__=="__main__":

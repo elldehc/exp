@@ -11,15 +11,19 @@ class BackBone(nn.Module):
         # self.lstm=nn.LSTM((EDGE_NODE_NUM+CLOUD_NODE_NUM*CLOUD_CLUSTER_NUM)*4,(EDGE_NODE_NUM+CLOUD_NODE_NUM*CLOUD_CLUSTER_NUM)*16,1,batch_first=True)
         self.lstm2=nn.LSTM(TASK_PER_CLUSTER*(5+5+6+5+2+10+1),128)
         # self.fc1=nn.Linear((EDGE_NODE_NUM+CLOUD_NODE_NUM*CLOUD_CLUSTER_NUM)*16,128)
-        self.fc2=nn.Linear(EDGE_CLUSTER_NUM,128)
-    def forward(self,cluster_num,pref,history):
+        self.fc2=nn.Linear(EDGE_CLUSTER_NUM,64)
+        self.fc3=nn.Linear(TASK_PER_CLUSTER,64)
+    def forward(self,tasknum,cluster_num,pref,history):
         history=torch.reshape(history,[-1,HISTORY_NUM,TASK_PER_CLUSTER*(5+5+6+5+2+10+1)])
         y1,_=self.lstm2(history)
         y1=y1[:,-1,:]
         cluster_num=torch.reshape(cluster_num,[-1,EDGE_CLUSTER_NUM])
         y2=self.fc2(cluster_num)
         y2=self.relu(y2)
-        y=torch.concat([y1,y2],dim=1)
+        tasknum=torch.reshape(tasknum,[-1,TASK_PER_CLUSTER])
+        y3=self.fc3(tasknum)
+        # print(y1.shape,y2.shape,y3.shape)
+        y=torch.concat([y1,y2,y3],dim=1)
         # print(pref.shape)
         pref=torch.reshape(pref,[-1,TASK_PER_CLUSTER,3])
         y=torch.einsum("bn,blm->blnm",y,pref)
@@ -65,7 +69,10 @@ class CriticHead(nn.Module):
         self.fc3=nn.Linear(128,1)
         self.fc4=nn.Linear(128,1)
     def forward(self,backbone_y,y_res,y_fr,y_estep,y_enode,y_ccluster,y_cnode):
-        nodes=torch.concat([y_enode,torch.reshape(torch.einsum("bijn,bijm->bijnm",y_ccluster,y_cnode),[-1,EDGE_CLUSTER_NUM,TASK_PER_CLUSTER,CLOUD_NODE_NUM*CLOUD_CLUSTER_NUM])],dim=3)
+        # print(y_ccluster.shape,y_cnode.shape)
+        y_cnodes=torch.einsum("bijn,bijm->bijnm",y_ccluster,y_cnode)
+        y_cnodes=torch.reshape(y_cnodes,[-1,EDGE_CLUSTER_NUM,TASK_PER_CLUSTER,CLOUD_NODE_NUM*CLOUD_CLUSTER_NUM])
+        nodes=torch.concat([y_enode,y_cnodes],dim=3)
         y2=torch.reshape(torch.einsum("bijn,bijm,bijo->bijnmo",y_res,y_fr,y_estep),[-1,EDGE_CLUSTER_NUM,TASK_PER_CLUSTER,5*5*6])
         # y2.shape==[-1,EDGE_CLUSTER_NUM,TASK_PER_CLUSTER,5*5*6]
         # backbone_y.shape==[-1,EDGE_CLUSTER_NUM,TASK_PER_CLUSTER,256*3]
@@ -92,7 +99,7 @@ class ActorCritic(nn.Module):
         for i in range(EDGE_CLUSTER_NUM):
             self.actors.append(ActorHead())
         self.critic=CriticHead()
-    def forward(self,pref,history):
+    def forward(self,clusternum,tasknum,pref,history):
         y_res=[]
         y_fr=[]
         y_estep=[]
@@ -100,10 +107,11 @@ class ActorCritic(nn.Module):
         y_ccluster=[]
         y_cnode=[]
         backs=[]
-        for i in range(EDGE_CLUSTER_NUM):
+        for i in range(clusternum):
             cluster=torch.zeros([EDGE_CLUSTER_NUM],device="cuda",dtype=torch.float)
             cluster[i]=1
-            backs.append(self.backbone(cluster,pref[i],history[i]))
+            # print(tasknum.shape)
+            backs.append(self.backbone(tasknum[i],cluster,pref[i],history[i]))
             action=self.actors[i](backs[i])
             y_res.append(action[0])
             y_fr.append(action[1])
@@ -111,6 +119,14 @@ class ActorCritic(nn.Module):
             y_enode.append(action[3])
             y_ccluster.append(action[4])
             y_cnode.append(action[5])
+        for i in range(clusternum,EDGE_CLUSTER_NUM):
+            backs.append(torch.zeros_like(backs[0],device="cuda",dtype=torch.float))
+            y_res.append(torch.zeros_like(y_res[0],device="cuda",dtype=torch.float))
+            y_fr.append(torch.zeros_like(y_fr[0],device="cuda",dtype=torch.float))
+            y_estep.append(torch.zeros_like(y_estep[0],device="cuda",dtype=torch.float))
+            y_enode.append(torch.zeros_like(y_enode[0],device="cuda",dtype=torch.float))
+            y_ccluster.append(torch.zeros_like(y_ccluster[0],device="cuda",dtype=torch.float))
+            y_cnode.append(torch.zeros_like(y_cnode[0],device="cuda",dtype=torch.float))
         back=torch.stack(backs,dim=1)
         y_res=torch.stack(y_res,dim=1)
         y_fr=torch.stack(y_fr,dim=1)

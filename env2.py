@@ -6,10 +6,10 @@ import pickle
 
 
 EDGE_NODE_NUM=5
-EDGE_CLUSTER_NUM=3
+EDGE_CLUSTER_NUM=20
 CLOUD_NODE_NUM=10
 CLOUD_CLUSTER_NUM=2
-TASK_PER_CLUSTER=10
+TASK_PER_CLUSTER=100
 HISTORY_NUM=10
 RES_MAP = [360, 540, 720, 900, 1080]
 FPS_MAP = [2, 3, 5, 10, 15]
@@ -34,7 +34,7 @@ class Env:
         self.tasknum=TASK_PER_CLUSTER*EDGE_CLUSTER_NUM
         self.is_train=is_train
         if not self.is_train:
-            self.alpha=np.array(pickle.load(open("our_alpha.pkl","rb"))[:100],dtype=np.float32)
+            self.alpha=np.array(pickle.load(open("our_alpha.pkl","rb")),dtype=np.float32)
             self.alpha/=np.sum(self.alpha,axis=1)[:,None]
             self.alpha_num=0
         con=sqlite3.connect(self.table_file)
@@ -106,15 +106,19 @@ class Env:
                 for k in range(6):
                     a=[0]*([5,5,6,5,2,10,1][k])
                     # print(it[jt])
-                    a[it[jt][k]]=1
+                    if jt in it:
+                        a[it[jt][k]]=1
                     th+=a
-                th.append(it[jt][6])
+                if jt in it:
+                    th.append(it[jt][6])
+                else:
+                    th.append(0)
             action_history.append(th)
 
 
         return history,cluster_tasks,action_history
 
-    def submit_action(self,actions): # actions: dict task id->(resolution,frame rate,edge step,edge select,cloud cluster select,cloud select)
+    def submit_action(self,actions,real_tasknum,real_clusters): # actions: dict task id->(resolution,frame rate,edge step,edge select,cloud cluster select,cloud select)
         used_edge_res=[[[0,0,0,0] for i in range(EDGE_NODE_NUM)] for j in range(EDGE_CLUSTER_NUM)]
         used_cloud_res=[[[0,0,0,0] for i in range(CLOUD_NODE_NUM)] for j in range(CLOUD_CLUSTER_NUM)]
         acc=dict()
@@ -123,6 +127,7 @@ class Env:
         size_client_edge=dict()
         size_edge_cloud=dict()
         for it in actions:
+            # print(actions[it])
             cluster=self.now_cluster[it]
             video=self.now_video[it]
             seg=self.now_seg[it]
@@ -165,7 +170,7 @@ class Env:
             # print(self.now_para[it][0]*acc[it],lat,self.now_para[it][2]*cost)
             if used_edge_res[cluster][actions[it][3]][1]>EDGE_MEM or used_edge_res[cluster][actions[it][3]][1]>EDGE_GPU_MEM or used_cloud_res[actions[it][4]][actions[it][5]][1]>CLOUD_MEM or used_cloud_res[actions[it][4]][actions[it][5]][1]>CLOUD_GPU_MEM:
                 u=FAILC
-            tot_ans[cluster]+=u/TASK_PER_CLUSTER
+            tot_ans[cluster]+=u/real_tasknum
             actions[it]=list(actions[it])+[u]
             all_ans.append((acc[it],real_lat,cost,u))
 
@@ -177,23 +182,7 @@ class Env:
             self.action_history=self.action_history[-HISTORY_NUM*10:]
 
         for i in range(self.tasknum):
-            self.now_seg[i]+=1
-            if self.now_seg[i]>=self.videos[self.now_video[i]]:
-                if self.is_train:
-                    self.now_video[i]=self.video_list[random.randint(0,len(self.video_list)-1)]
-                    self.now_seg[i]=0
-                    self.now_para[i]=(random.random(),random.random(),random.random())
-                else:
-                    self.now_video_num+=1
-                    self.alpha_num+=1
-                    if self.now_video_num>=len(self.video_list):
-                        self.now_video_num=0
-                    if self.alpha_num<len(self.alpha):
-                        self.now_video[i]=self.video_list[self.now_video_num]
-                        self.now_seg[i]=0
-                        self.now_para[i]=self.alpha[self.alpha_num]
-                    # if self.alpha_num>=len(self.alpha):
-                    #     self.alpha_num=0
+            self.getnextseg(i)
                         
 
         return tot_ans,all_ans
@@ -214,6 +203,8 @@ class Env:
                         self.now_para[cluster]=self.alpha[self.alpha_num]
                     self.now_video_num+=1
                     self.alpha_num+=1
+                    if self.alpha_num>=len(self.alpha):
+                        self.alpha_num=0
                     if self.now_video_num>=len(self.video_list):
                         self.now_video_num=0
                     

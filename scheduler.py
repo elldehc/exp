@@ -611,6 +611,7 @@ region_num = EDGE_NODE_NUM  # edge分为5个片区，每个片区2个edge gpu 10
 # input size=[HISTORY_NUM,(EDGE_NODE_NUM+CLOUD_NODE_NUM*CLOUD_CLUSTER_NUM),4],[TASK_PER_CLUSTER,3]
 # output size=[TASK_PER_CLUSTER,5]*6
 def rong_schedule(res,taskid,pref):
+    tasknum=len(taskid)
     global pre_solution,edge_config_dict, cloud_config_dict, edge_config, cloud_config
     edge_excel_file = 'new_edge_profile.xlsx'
     cloud_excel_file = 'new_cloud_profile.xlsx'
@@ -634,25 +635,25 @@ def rong_schedule(res,taskid,pref):
 
     camera_info=dict()
     alpha=dict()
-    for i in range(TASK_PER_CLUSTER):
+    for i in range(tasknum):
         name="{:04d}".format(i)
         camera_info[name]={name:[0,2,0]}
         alpha[i]=[0,0,pref[i][0],pref[i][1]]
     R=[EDGE_GPU_MEM]*EDGE_NODE_NUM+[CLOUD_GPU_MEM]+[EDGE_BW]*EDGE_NODE_NUM
     ans,camera_info,res_mapped,camera_info_mapped=section(camera_info, R, CLOUD_BW, 300, alpha, 0)
     ret_ans=dict()
-    for i in range(TASK_PER_CLUSTER):
+    for i in range(tasknum):
         name="{:04d}".format(i)
         config=ans[name]["config"]
         place=ans[name]["place"][0]
         if place==0:
             if len(config)==2:
-                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),4,i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
+                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),4,i//(tasknum//EDGE_NODE_NUM),(i//CLOUD_NODE_NUM)%2,i%CLOUD_NODE_NUM)
             else:
-                ret_ans[taskid[i]]=(int(config[1]),int(config[2]),4,i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
+                ret_ans[taskid[i]]=(int(config[1]),int(config[2]),4,i//(tasknum//EDGE_NODE_NUM),(i//CLOUD_NODE_NUM)%2,i%CLOUD_NODE_NUM)
         else:
             if len(config)==3:
-                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),max(0,4-int(config[2])),i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
+                ret_ans[taskid[i]]=(int(config[0]),int(config[1]),max(0,4-int(config[2])),i//(tasknum//EDGE_NODE_NUM),(i//CLOUD_NODE_NUM)%2,i%CLOUD_NODE_NUM)
             else:
-                ret_ans[taskid[i]]=(int(config[4]),int(config[5]),max(0,4-int(config[6])),i//(TASK_PER_CLUSTER//EDGE_NODE_NUM),i%2,i//(TASK_PER_CLUSTER//CLOUD_NODE_NUM))
+                ret_ans[taskid[i]]=(int(config[4]),int(config[5]),max(0,4-int(config[6])),i//(tasknum//EDGE_NODE_NUM),(i//CLOUD_NODE_NUM)%2,i%CLOUD_NODE_NUM)
     return ret_ans

@@ -21,19 +21,25 @@ def load_best_actor_model(actor:ActorCritic):
 
 
 
-def eval_rl(actor:ActorCritic):
+def eval_rl(actor:ActorCritic,eval_config_file="eval_config.txt"):
     env=Env("profile_table-val.db",is_train=False)
+    with open(eval_config_file) as f:
+        s=f.read().strip().split("\n")
+        n=int(s[0])
+        tasks=[list(map(int,it.split())) for it in s[1:]]
     tot_reward=0
     anss=[]
     tot_tasks=0
     with torch.no_grad():
         reward=torch.tensor([0 for i in range(EDGE_CLUSTER_NUM)],device="cuda")
-        while True:
-            states=[[],[],[],[]]
-            for i in range(EDGE_CLUSTER_NUM):
+        for tasknum,clusternum in tqdm(tasks):
+            states=[[],[],[],[],[]]
+            for i in range(clusternum):
                 t=env.get_state(i)
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
+                tasknum_vec=torch.zeros([TASK_PER_CLUSTER],device="cuda",dtype=torch.float)
+                tasknum_vec[tasknum-1]=1
                 taskid=list(t[1].keys())
                 pref=torch.tensor(np.array([t[1][j] for j in taskid]),device="cuda")
                 # print("i=",i,"taskid=",taskid)
@@ -42,21 +48,20 @@ def eval_rl(actor:ActorCritic):
                 states[1].append(taskid)
                 states[2].append(pref)
                 states[3].append(history)
+                states[4].append(tasknum_vec)
                 
 
             action_dict=dict()
-            t=actor(torch.stack(states[2]),torch.stack(states[3]))
-            for i in range(EDGE_CLUSTER_NUM):
-                for j in range(TASK_PER_CLUSTER):
+            t=actor(clusternum,torch.stack(states[4]),torch.stack(states[2]),torch.stack(states[3]))
+            for i in range(clusternum):
+                for j in range(len(states[1][i])):
                     # print("i=",i,"j=",j,states[1][i][j],tuple(np.argmax(t[k][0][j].cpu().numpy()) for k in range(6)))
                     action_dict[states[1][i][j]]=tuple(np.argmax(t[k][0][i][j].cpu().numpy()) for k in range(6))
 
-            reward,ans=env.submit_action(action_dict)
+            reward,ans=env.submit_action(action_dict,tasknum,clusternum)
             tot_reward+=np.mean(reward)
-            tot_tasks+=EDGE_CLUSTER_NUM
+            tot_tasks+=clusternum
             anss+=ans
-            if env.finished():
-                break
     return sum(it[3] for it in anss)/len(anss),anss
             
 if __name__=="__main__":

@@ -152,9 +152,13 @@ def profile_jcab():
     return acc
 
 
-def eval_jcab():
+def eval_jcab(eval_config_file="eval_config.txt"):
     acc_table=profile_jcab()
     env=Env("profile_table-val.db",is_train=False)
+    with open(eval_config_file) as f:
+        s=f.read().strip().split("\n")
+        n=int(s[0])
+        tasks=[list(map(int,it.split())) for it in s[1:]]
     tot_reward=0
     anss=[]
     tot_tasks=0
@@ -164,9 +168,9 @@ def eval_jcab():
     for i in range(EDGE_CLUSTER_NUM):
         init_ans[i],q[i]=ans_init()
         initu[i]=0
-    while True:
+    for tasknum,clusternum in tqdm(tasks):
         states=[[],[],[]]
-        for i in range(EDGE_CLUSTER_NUM):
+        for i in range(clusternum):
             t=env.get_state(i)
             # print(t[0])
             res=np.array(t[0],dtype=np.float32)
@@ -176,21 +180,19 @@ def eval_jcab():
             states[1].append(taskid)
             states[2].append(pref)
         action_dict=dict()
-        for i in range(EDGE_CLUSTER_NUM):
+        for i in range(clusternum):
             t,initu[i],q[i]=oneslot(states[2][i],acc_table,init_ans[i],initu[i],q[i])
             init_ans[i]=t
-            for k,v in init_ans[i].items():
-                action_dict[states[1][i][k]]=v
+            for j in range(tasknum):
+                action_dict[states[1][i][j]]=init_ans[i][j]
 
         
-        reward,ans=env.submit_action(action_dict)
+        reward,ans=env.submit_action(action_dict,tasknum,clusternum)
         # print(np.mean(reward)-sum(it[3] for it in ans)/len(ans))
         # assert np.abs(np.mean(reward)-sum(it[3] for it in ans)/len(ans))<1e-9
         tot_reward+=np.mean(reward)
-        tot_tasks+=EDGE_CLUSTER_NUM
+        tot_tasks+=clusternum
         anss+=ans
-        if env.finished():
-            break
     return sum(it[3] for it in anss)/len(anss),anss
 
 if __name__=="__main__":

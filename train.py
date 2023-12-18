@@ -39,11 +39,15 @@ def train(batch_size=32,gamma=0.5):
         reward=torch.tensor([0 for i in range(EDGE_CLUSTER_NUM)],device="cuda")
         replay_buf=[]
         for step in range(batch_size):
-            states=[[],[],[],[]]
-            for i in range(EDGE_CLUSTER_NUM):
+            clusternum=random.randint(1,EDGE_CLUSTER_NUM)
+            tasknum=random.randint(1,TASK_PER_CLUSTER)
+            states=[[],[],[],[],[]]
+            for i in range(clusternum):
                 t=env.get_state(i)
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
+                tasknum_vec=torch.zeros([TASK_PER_CLUSTER],device="cuda",dtype=torch.float)
+                tasknum_vec[tasknum-1]=1
                 taskid=list(t[1].keys())
                 # print("i=",i,"taskid=",taskid)
                 history=torch.tensor(t[2],device="cuda",dtype=torch.float)
@@ -52,12 +56,13 @@ def train(batch_size=32,gamma=0.5):
                 states[1].append(taskid)
                 states[2].append(pref)
                 states[3].append(history)
+                states[4].append(tasknum_vec)
             action_dict=dict()
             action_prob=[]
-            t=actor(torch.stack(states[2]),torch.stack(states[3]))
-            for i in range(EDGE_CLUSTER_NUM):
+            t=actor(clusternum,torch.stack(states[4]),torch.stack(states[2]),torch.stack(states[3]))
+            for i in range(clusternum):
                 t_action_prob=0
-                for j in range(TASK_PER_CLUSTER):
+                for j in range(tasknum):
                     m = [Categorical(t[k][0][i][j]) for k in range(6)]
                     choices=[m[k].sample() for k in range(6)]
                     t_action_prob+=(sum([m[k].log_prob(choices[k]) for k in range(6)]))
@@ -66,15 +71,15 @@ def train(batch_size=32,gamma=0.5):
                 action_prob.append(t_action_prob)
             
             
-            reward=torch.tensor(env.submit_action(action_dict)[0],device="cuda")            
+            reward=torch.tensor(env.submit_action(action_dict,tasknum,clusternum)[0],device="cuda")            
             values=t[6][0]
             action_prob=torch.stack(action_prob)
             # print(reward.shape,values.shape,action_prob.shape)
 
             replay_buf.append((
-                reward,
-                values,
-                action_prob,
+                torch.mean(reward),
+                torch.mean(values),
+                torch.sum(action_prob),
             ))
         
         sample_idx=np.arange(batch_size)
