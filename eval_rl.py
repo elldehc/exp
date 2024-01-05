@@ -21,7 +21,7 @@ def load_best_actor_model(actor:ActorCritic):
 
 
 
-def eval_rl(actor:ActorCritic,eval_config_file="eval_config.txt"):
+def eval_rl(actor:ActorCritic,eval_config_file="eval_config.txt",hide_bar=False):
     env=Env("profile_table-val.db",is_train=False)
     with open(eval_config_file) as f:
         s=f.read().strip().split("\n")
@@ -32,15 +32,15 @@ def eval_rl(actor:ActorCritic,eval_config_file="eval_config.txt"):
     tot_tasks=0
     with torch.no_grad():
         reward=torch.tensor([0 for i in range(EDGE_CLUSTER_NUM)],device="cuda")
-        for tasknum,clusternum in tqdm(tasks):
+        for tasknum,clusternum in tqdm(tasks,disable=hide_bar):
             states=[[],[],[],[],[]]
             for i in range(clusternum):
                 t=env.get_state(i)
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
-                tasknum_vec=torch.zeros([TASK_PER_CLUSTER],device="cuda",dtype=torch.float)
-                tasknum_vec[tasknum-1]=1
-                taskid=list(t[1].keys())
+                # tasknum_vec=torch.zeros([TASK_PER_CLUSTER],device="cuda",dtype=torch.float)
+                # tasknum_vec[tasknum-1]=1
+                taskid=list(t[1].keys())[:tasknum]
                 pref=torch.tensor(np.array([t[1][j] for j in taskid]),device="cuda")
                 # print("i=",i,"taskid=",taskid)
                 history=torch.tensor(t[2],device="cuda",dtype=torch.float)
@@ -48,15 +48,16 @@ def eval_rl(actor:ActorCritic,eval_config_file="eval_config.txt"):
                 states[1].append(taskid)
                 states[2].append(pref)
                 states[3].append(history)
-                states[4].append(tasknum_vec)
+                states[4].append(tasknum)
                 
 
             action_dict=dict()
-            t=actor(clusternum,torch.stack(states[4]),torch.stack(states[2]),torch.stack(states[3]))
+            t=actor(clusternum,torch.tensor(states[4]),torch.stack(states[2]),torch.stack(states[3]))
             for i in range(clusternum):
+                # assert len(states[1][i])==tasknum
                 for j in range(len(states[1][i])):
                     # print("i=",i,"j=",j,states[1][i][j],tuple(np.argmax(t[k][0][j].cpu().numpy()) for k in range(6)))
-                    action_dict[states[1][i][j]]=tuple(np.argmax(t[k][0][i][j].cpu().numpy()) for k in range(6))
+                    action_dict[states[1][i][j]]=tuple(np.argmax(t[k][i][j].cpu().numpy()) for k in range(6))
 
             reward,ans=env.submit_action(action_dict,tasknum,clusternum)
             tot_reward+=np.mean(reward)

@@ -31,7 +31,7 @@ def train(batch_size=32,gamma=0.5):
     replay_buf=[]
     actor_optim=optim.Adam(chain(actor.parameters()),lr=1e-3)
     # critic_optim=optim.Adam(critic.parameters(),lr=1e-3)
-    best_reward=eval_rl(actor)[0]
+    best_reward=eval_rl(actor,hide_bar=True)[0]
     bar=tqdm(range(last+1,10000000),desc=f"reward={-1} best_reward={best_reward}")
     loss=0
     aloss=0
@@ -46,9 +46,9 @@ def train(batch_size=32,gamma=0.5):
                 t=env.get_state(i)
                 # print(t[0])
                 res=torch.tensor(t[0],device="cuda",dtype=torch.float)
-                tasknum_vec=torch.zeros([TASK_PER_CLUSTER],device="cuda",dtype=torch.float)
-                tasknum_vec[tasknum-1]=1
-                taskid=list(t[1].keys())
+                # tasknum_vec=torch.zeros([TASK_PER_CLUSTER],device="cuda",dtype=torch.float)
+                # tasknum_vec[tasknum-1]=1
+                taskid=list(t[1].keys())[:tasknum]
                 # print("i=",i,"taskid=",taskid)
                 history=torch.tensor(t[2],device="cuda",dtype=torch.float)
                 pref=torch.tensor(np.array([t[1][j] for j in taskid]),device="cuda")
@@ -56,30 +56,30 @@ def train(batch_size=32,gamma=0.5):
                 states[1].append(taskid)
                 states[2].append(pref)
                 states[3].append(history)
-                states[4].append(tasknum_vec)
+                states[4].append(tasknum)
             action_dict=dict()
             action_prob=[]
-            t=actor(clusternum,torch.stack(states[4]),torch.stack(states[2]),torch.stack(states[3]))
+            t=actor(clusternum,torch.tensor(states[4]),torch.stack(states[2]),torch.stack(states[3]))
             for i in range(clusternum):
                 t_action_prob=0
                 for j in range(tasknum):
-                    m = [Categorical(t[k][0][i][j]) for k in range(6)]
+                    m = [Categorical(t[k][i][j]) for k in range(6)]
                     choices=[m[k].sample() for k in range(6)]
                     t_action_prob+=(sum([m[k].log_prob(choices[k]) for k in range(6)]))
                     # print("i=",i,"j=",j,states[1][i][j],tuple(choices[k].item() for k in range(6)))
                     action_dict[states[1][i][j]]=tuple(choices[k].item() for k in range(6))
-                action_prob.append(t_action_prob)
+                action_prob.append(t_action_prob/tasknum/clusternum)
             
             
             reward=torch.tensor(env.submit_action(action_dict,tasknum,clusternum)[0],device="cuda")            
-            values=t[6][0]
+            values=t[6]
             action_prob=torch.stack(action_prob)
             # print(reward.shape,values.shape,action_prob.shape)
 
             replay_buf.append((
                 torch.mean(reward),
                 torch.mean(values),
-                torch.sum(action_prob),
+                torch.mean(action_prob),
             ))
         
         sample_idx=np.arange(batch_size)
@@ -102,7 +102,7 @@ def train(batch_size=32,gamma=0.5):
         actor_optim.zero_grad()
         # critic_optim.step()
         # critic_optim.zero_grad()
-        eval_reward=eval_rl(actor)[0]
+        eval_reward=eval_rl(actor,hide_bar=True)[0]
         if eval_reward>best_reward:
             best_reward=eval_reward
             torch.save(actor.state_dict(),f"saved_models/actor_{epoch}.pth")
